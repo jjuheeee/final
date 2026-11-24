@@ -1,0 +1,326 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from pathlib import Path
+from datetime import datetime
+from uuid import uuid4
+
+st.set_page_config(
+    page_title="DBD LAB",
+    page_icon="💀",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 기본 데이터 불러오기
+DATA = Path("data")
+
+survivors = pd.read_csv(DATA / "survivors.csv")["name"].tolist()
+killers = pd.read_csv(DATA / "killers.csv")["name"].tolist()
+maps = pd.read_csv(DATA / "maps.csv")["name"].tolist()
+perks = pd.read_csv(DATA / "perks.csv")
+
+# 경기 기록 저장 파일
+MATCH_FILE = DATA / "matches.csv"
+
+columns = [
+    "id", "date", "time", "mode", "character",
+    "opponent", "map", "perks", "result",
+    "chase", "generators", "rescues", "kills",
+    "hooks", "party", "condition", "memo"
+]
+
+if not MATCH_FILE.exists():
+    pd.DataFrame(columns=columns).to_csv(
+        MATCH_FILE, index=False, encoding="utf-8-sig"
+    )
+
+matches = pd.read_csv(MATCH_FILE)
+
+# 사이드바
+with st.sidebar:
+    st.title("💀 DBD LAB")
+    st.caption("DEAD BY DAYLIGHT ANALYTICS")
+    st.divider()
+
+    mode = st.radio(
+        "플레이 유형",
+        ["생존자", "살인마"],
+        horizontal=True
+    )
+
+    st.divider()
+
+    menu = st.radio(
+        "메뉴",
+        [
+            "홈",
+            "경기 기록",
+            "경기 내역",
+            "플레이 패턴 분석",
+            "캐릭터 및 퍽 분석",
+            "맞춤형 리포트"
+        ]
+    )
+
+filtered = matches[matches["mode"] == mode].copy()
+
+# 홈 화면
+if menu == "홈":
+    st.title("DBD LAB")
+    st.caption("나의 데바데 플레이 분석 연구소")
+    st.divider()
+    st.subheader(f"{mode} 플레이 대시보드")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    total = len(filtered)
+    col1.metric("전체 경기", f"{total}회")
+
+    main_character = (
+        filtered["character"].mode().iloc[0]
+        if total else "-"
+    )
+
+    if mode == "생존자":
+        valid = filtered[
+            filtered["result"] != "연결 종료"
+        ]
+
+        escape_rate = (
+            (valid["result"] == "탈출").mean() * 100
+            if len(valid) else 0
+        )
+
+        chase_avg = filtered["chase"].mean() if total else 0
+
+        col2.metric("탈출률", f"{escape_rate:.1f}%")
+        col3.metric("평균 추격 시간", f"{chase_avg:.0f}초")
+        col4.metric("주력 생존자", main_character)
+
+    else:
+        kill_avg = filtered["kills"].mean() if total else 0
+
+        four_k = (
+            (filtered["kills"] == 4).mean() * 100
+            if total else 0
+        )
+
+        col2.metric("평균 처치 수", f"{kill_avg:.1f}명")
+        col3.metric("4킬 달성률", f"{four_k:.1f}%")
+        col4.metric("주력 살인마", main_character)
+
+    st.divider()
+
+    if total == 0:
+        st.info("경기 기록을 추가하면 분석 결과가 표시됩니다.")
+    else:
+        st.subheader("최근 경기 기록")
+        st.dataframe(
+            filtered.tail(5).iloc[::-1][
+                ["date", "character", "map", "result"]
+            ],
+            hide_index=True,
+            use_container_width=True
+        )
+
+# 경기 기록
+elif menu == "경기 기록":
+    st.title("경기 기록하기")
+    st.caption("NEW MATCH RECORD")
+    st.divider()
+
+    with st.form(f"match_form_{mode}"):
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            date = st.date_input("플레이 날짜")
+        with col2:
+            time = st.time_input("플레이 시간")
+
+        col1, col2 = st.columns(2)
+
+        opponent = ""
+        chase = 0
+        generators = 0
+        rescues = 0
+        kills = 0
+        hooks = 0
+        party = "-"
+
+        if mode == "생존자":
+            with col1:
+                character = st.selectbox(
+                    "플레이 생존자", survivors
+                )
+            with col2:
+                opponent = st.selectbox(
+                    "상대 살인마", killers
+                )
+        else:
+            character = st.selectbox(
+                "플레이 살인마", killers
+            )
+
+        selected_map = st.selectbox("맵 선택", maps)
+
+        perk_options = perks[
+            perks["role"] == mode
+        ]["name"].tolist()
+
+        selected_perks = st.multiselect(
+            "사용한 퍽 (최대 4개)",
+            perk_options,
+            max_selections=4
+        )
+
+        st.divider()
+        st.subheader("경기 결과")
+
+        if mode == "생존자":
+
+            result = st.radio(
+                "경기 결과",
+                ["탈출", "희생", "사망", "연결 종료"],
+                horizontal=True
+            )
+
+            party = st.radio(
+                "파티 유형",
+                ["솔큐", "2인큐", "3인큐", "4인큐"],
+                horizontal=True
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            chase = col1.number_input(
+                "총 추격 시간 (초)",
+                min_value=0, step=10
+            )
+
+            generators = col2.number_input(
+                "발전기 수리량 (%)",
+                min_value=0, step=10
+            )
+
+            rescues = col3.number_input(
+                "구조 횟수",
+                min_value=0, step=1
+            )
+
+        else:
+
+            kills = st.slider(
+                "처치한 생존자 수", 0, 4, 0
+            )
+
+            hooks = st.number_input(
+                "갈고리 횟수",
+                min_value=0, max_value=12, step=1
+            )
+
+            result = f"{kills}킬"
+
+        condition = st.select_slider(
+            "플레이 컨디션",
+            options=[
+                "매우 나쁨", "나쁨", "보통",
+                "좋음", "매우 좋음"
+            ],
+            value="보통"
+        )
+
+        memo = st.text_area(
+            "경기 메모",
+            placeholder="아쉬웠던 점이나 잘했던 점을 기록하세요."
+        )
+
+        submitted = st.form_submit_button(
+            "경기 기록 저장",
+            use_container_width=True,
+            type="primary"
+        )
+
+    if submitted:
+
+        new_match = {
+            "id": str(uuid4()),
+            "date": str(date),
+            "time": str(time),
+            "mode": mode,
+            "character": character,
+            "opponent": opponent,
+            "map": selected_map,
+            "perks": " | ".join(selected_perks),
+            "result": result,
+            "chase": chase,
+            "generators": generators,
+            "rescues": rescues,
+            "kills": kills,
+            "hooks": hooks,
+            "party": party,
+            "condition": condition,
+            "memo": memo
+        }
+
+        pd.DataFrame([new_match]).to_csv(
+            MATCH_FILE,
+            mode="a",
+            header=False,
+            index=False,
+            encoding="utf-8"
+        )
+
+        st.success("경기 기록이 저장되었습니다!")
+
+# 경기 내역
+elif menu == "경기 내역":
+    st.title("나의 경기 내역")
+    st.caption("MATCH HISTORY")
+    st.divider()
+
+    if filtered.empty:
+        st.info("아직 저장된 경기 기록이 없습니다.")
+    else:
+        st.metric("저장된 경기", f"{len(filtered)}회")
+
+        display = filtered.drop(columns=["id"]).copy()
+
+        display = display.rename(columns={
+            "date": "날짜",
+            "time": "시간",
+            "mode": "플레이 유형",
+            "character": "캐릭터",
+            "opponent": "상대 살인마",
+            "map": "맵",
+            "perks": "사용 퍽",
+            "result": "결과",
+            "chase": "추격 시간",
+            "generators": "발전기 수리량",
+            "rescues": "구조 횟수",
+            "kills": "처치 수",
+            "hooks": "갈고리 횟수",
+            "party": "파티 유형",
+            "condition": "컨디션",
+            "memo": "메모"
+        })
+
+        st.dataframe(
+            display.iloc[::-1],
+            hide_index=True,
+            use_container_width=True
+        )
+
+        st.download_button(
+            "경기 기록 CSV 다운로드",
+            data=filtered.to_csv(
+                index=False
+            ).encode("utf-8-sig"),
+            file_name="dbd_matches.csv",
+            mime="text/csv"
+        )
+
+else:
+    st.title(menu)
+    st.info("개발 예정인 기능입니다.")
