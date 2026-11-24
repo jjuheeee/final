@@ -1,0 +1,9 @@
+{
+  "terminal.integrated.profiles.linux": {
+    "Bash (workspace history)": {
+      "path": "/bin/bash",
+      "args": ["--rcfile", "${workspaceFolder}/.vscode/bashrc", "-i"]
+    }
+  },
+  "terminal.integrated.defaultProfile.linux": "Bash (workspace history)"
+}

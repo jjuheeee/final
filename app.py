@@ -107,6 +107,1124 @@ with st.sidebar:
 
 filtered = matches[matches["mode"] == mode].copy()
 
+
+
+
+def character_picker(options, key, role, label, show_grid=False):
+    state_key = f"{key}_selected"
+    open_key = f"{key}_open"
+
+    if st.session_state.get(state_key) not in options:
+        st.session_state[state_key] = options[0]
+
+    if open_key not in st.session_state:
+        st.session_state[open_key] = False
+
+    current = st.session_state[state_key]
+
+    if not show_grid:
+        st.markdown("""
+        <style>
+        div[class*="st-key-charcard_"] {
+            background: rgba(24,24,28,0.88);
+            border: 1px solid #38383d;
+            border-radius: 5px;
+            padding: 6px;
+            transition: all 0.2s ease;
+        }
+
+        div[class*="st-key-charcard_"]:hover {
+            border-color: #d62828;
+            box-shadow: 0 0 14px #8b202066;
+            background: #30191d;
+        }
+
+        div[class*="st-key-charcard_selected_"] {
+            border: 1px solid #e53935;
+            background: #35191d;
+            box-shadow: 0 0 12px #c6282855;
+        }
+
+        div[class*="st-key-charcard_"] button {
+            min-height: 48px;
+            padding: 4px;
+            white-space: normal;
+        }
+
+        div[class*="st-key-charcard_"] button p {
+            font-size: 12px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        st.subheader(label)
+
+        with st.container(border=True):
+            a, b = st.columns([1, 2])
+
+            with a:
+                image = Path("assets/characters") / f"{current}.png"
+
+                if image.exists():
+                    st.image(str(image), width=120)
+                else:
+                    st.caption("NO IMAGE")
+
+            with b:
+                st.caption(
+                    "SELECTED SURVIVOR"
+                    if role == "생존자"
+                    else "SELECTED KILLER"
+                )
+
+                st.subheader(current)
+
+                if st.button(
+                    "목록 닫기"
+                    if st.session_state[open_key]
+                    else f"{role} 변경",
+                    key=f"{key}_toggle",
+                    width="stretch"
+                ):
+                    st.session_state[open_key] = not st.session_state[open_key]
+                    st.rerun()
+
+    if show_grid and st.session_state[open_key]:
+        st.divider()
+        st.subheader(f"{role} 선택")
+
+        search = st.text_input(
+            f"{role} 검색",
+            placeholder="캐릭터 이름을 입력하세요",
+            key=f"{key}_search"
+        )
+
+        visible = [
+            name for name in options
+            if search.replace(" ", "").lower()
+            in name.replace(" ", "").lower()
+        ]
+
+        if not visible:
+            st.info("검색 결과가 없습니다.")
+
+        for i in range(0, len(visible), 8):
+            cols = st.columns(8)
+
+            for col, name in zip(cols, visible[i:i+8]):
+                with col:
+                    selected = current == name
+
+                    prefix = (
+                        "charcard_selected_"
+                        if selected else "charcard_"
+                    )
+
+                    with st.container(
+                        key=f"{prefix}{key}_{options.index(name)}"
+                    ):
+                        image = Path("assets/characters") / f"{name}.png"
+
+                        if image.exists():
+                            st.image(str(image), width="stretch")
+                        else:
+                            st.caption("NO IMAGE")
+
+                        if st.button(
+                            name,
+                            key=f"{key}_pick_{name}",
+                            width="stretch",
+                            type="primary" if selected else "secondary"
+                        ):
+                            st.session_state[state_key] = name
+                            st.session_state[open_key] = False
+                            st.rerun()
+
+    return st.session_state[state_key]
+
+
+
+
+
+def render_match_history(history, perks, mode):
+
+    import base64
+    import html
+
+    maps_data = pd.read_csv(
+        "data/maps_clean.csv",
+        keep_default_na=False
+    )
+
+    map_lookup = {
+        row["name"]: row
+        for row in maps_data.to_dict("records")
+    }
+
+    perk_data = perks[perks["role"] == mode]
+
+    perk_images = dict(zip(
+        perk_data["name"],
+        perk_data["styled_image"]
+    ))
+
+    def clean(value):
+        return "" if pd.isna(value) else str(value)
+
+    def number(value):
+        try:
+            return float(value) if pd.notna(value) else 0
+        except (ValueError, TypeError):
+            return 0
+
+    def image_html(path, width, height):
+
+        path = Path(str(path))
+
+        if not path.is_file():
+            return (
+                f'<div style="height:{height}px;'
+                'display:flex;align-items:center;'
+                'justify-content:center;color:#777;'
+                'font-size:11px;">NO IMAGE</div>'
+            )
+
+        encoded = base64.b64encode(
+            path.read_bytes()
+        ).decode("utf-8")
+
+        return (
+            f'<img src="data:image/png;base64,{encoded}" '
+            f'style="width:{width}px;'
+            f'max-width:100%;height:{height}px;'
+            'object-fit:contain;display:block;'
+            'margin:auto;">'
+        )
+
+    st.markdown("""
+    <style>
+    div[class*="st-key-historycard_"] {
+        background: rgba(24,21,29,0.96);
+        border: 1px solid #44394e;
+        border-radius: 10px;
+        padding: 18px;
+        margin-bottom: 12px;
+    }
+
+    div[class*="st-key-historycard_win_"] {
+        border-left: 4px solid #56b987;
+    }
+
+    div[class*="st-key-historycard_loss_"] {
+        border-left: 4px solid #cf414e;
+    }
+
+    div[class*="st-key-historycard_neutral_"] {
+        border-left: 4px solid #88818f;
+    }
+
+    div[class*="st-key-historycard_"]
+    [data-testid="stMetricValue"] {
+        font-size: 23px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    data = history.sort_values(
+        ["date", "time"],
+        ascending=False
+    ).copy()
+
+    a, b, c = st.columns(3)
+
+    a.metric("전체 경기", f"{len(data)}회")
+
+    if mode == "생존자":
+        escaped = int((data["result"] == "탈출").sum())
+
+        b.metric("탈출", f"{escaped}회")
+        c.metric(
+            "탈출률",
+            f"{escaped / max(len(data), 1) * 100:.1f}%"
+        )
+    else:
+        b.metric(
+            "평균 처치",
+            f"{data['kills'].mean():.1f}명"
+        )
+
+        c.metric(
+            "4킬 달성률",
+            f"{(data['kills'] == 4).mean() * 100:.1f}%"
+        )
+
+    st.divider()
+
+    f1, f2, f3 = st.columns(3)
+
+    with f1:
+        character_filter = st.selectbox(
+            "캐릭터",
+            ["전체"] + sorted(
+                data["character"].dropna().unique()
+            ),
+            key="history_character"
+        )
+
+    with f2:
+        result_filter = st.selectbox(
+            "경기 결과",
+            ["전체"] + sorted(
+                data["result"].dropna().unique()
+            ),
+            key="history_result"
+        )
+
+    with f3:
+        date_filter = st.selectbox(
+            "경기 날짜",
+            ["전체"] + sorted(
+                data["date"].dropna().astype(str).unique(),
+                reverse=True
+            ),
+            key="history_date"
+        )
+
+    if character_filter != "전체":
+        data = data[
+            data["character"] == character_filter
+        ]
+
+    if result_filter != "전체":
+        data = data[
+            data["result"] == result_filter
+        ]
+
+    if date_filter != "전체":
+        data = data[
+            data["date"].astype(str) == date_filter
+        ]
+
+    st.caption(f"검색 결과: {len(data)} MATCHES")
+
+    if data.empty:
+        st.info("조건에 해당하는 경기가 없습니다.")
+        return
+
+    page_size = 10
+    pages = max(
+        1, (len(data)+page_size-1)//page_size
+    )
+
+    page = st.selectbox(
+        "페이지",
+        list(range(1, pages+1)),
+        format_func=lambda x: f"{x} / {pages} PAGE",
+        key=f"history_page_{mode}_{character_filter}_{result_filter}_{date_filter}"
+    )
+
+    data = data.iloc[
+        (page-1)*page_size:page*page_size
+    ]
+
+    for _, row in data.iterrows():
+
+        match_id = clean(row["id"])
+        character = clean(row["character"])
+        opponent = clean(row["opponent"])
+        result = clean(row["result"])
+        map_name = clean(row["map"])
+
+        if mode == "생존자":
+            status = (
+                "win" if result == "탈출"
+                else "neutral" if result == "연결 종료"
+                else "loss"
+            )
+        else:
+            kills = number(row["kills"])
+            status = (
+                "win" if kills >= 3
+                else "neutral" if kills == 2
+                else "loss"
+            )
+
+        color = {
+            "win": "#65c794",
+            "loss": "#ef737c",
+            "neutral": "#aaa3b2"
+        }[status]
+
+        with st.container(
+            key=f"historycard_{status}_{match_id}"
+        ):
+
+            left, right = st.columns([1, 2])
+
+            with left:
+                st.markdown(
+                    f'<span style="color:{color};'
+                    'font-size:21px;font-weight:800;">'
+                    f'{html.escape(result)}</span>',
+                    unsafe_allow_html=True
+                )
+
+            with right:
+                st.markdown(
+                    '<div style="text-align:right;'
+                    'color:#aaa;font-size:13px;">'
+                    f'{html.escape(clean(row["date"]))} · '
+                    f'{html.escape(clean(row["time"])[:5])}'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+
+            if mode == "생존자":
+
+                a, vs, b = st.columns([5, 1, 5])
+
+                with a:
+                    st.markdown(
+                        image_html(
+                            f"assets/characters/{character}.png",
+                            130, 125
+                        ),
+                        unsafe_allow_html=True
+                    )
+
+                    st.markdown(
+                        '<div style="text-align:center;">'
+                        f'<b>{html.escape(character)}</b><br>'
+                        f'<small>{html.escape(clean(row["party"]))}</small>'
+                        '</div>',
+                        unsafe_allow_html=True
+                    )
+
+                with vs:
+                    st.markdown(
+                        '<div style="text-align:center;'
+                        'padding-top:55px;color:#a39aa9;">'
+                        '<b>VS</b></div>',
+                        unsafe_allow_html=True
+                    )
+
+                with b:
+                    st.markdown(
+                        image_html(
+                            f"assets/characters/{opponent}.png",
+                            130, 125
+                        ),
+                        unsafe_allow_html=True
+                    )
+
+                    st.markdown(
+                        '<div style="text-align:center;">'
+                        f'<b>{html.escape(opponent)}</b><br>'
+                        '<small>상대 살인마</small></div>',
+                        unsafe_allow_html=True
+                    )
+
+            else:
+                st.markdown(
+                    image_html(
+                        f"assets/characters/{character}.png",
+                        140, 130
+                    ),
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(
+                    '<div style="text-align:center;">'
+                    f'<b>{html.escape(character)}</b>'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+
+            st.divider()
+
+            map_info = map_lookup.get(map_name, {})
+
+            a, b = st.columns([1, 2])
+
+            with a:
+                if map_info:
+                    st.markdown(
+                        image_html(
+                            map_info["image"],
+                            240, 110
+                        ),
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.caption("세부 맵 이미지 없음")
+
+            with b:
+                st.caption("PLAYED MAP")
+                st.markdown(f"**{map_name}**")
+                st.caption(
+                    map_info.get("realm", "지역 기록")
+                )
+
+            st.caption("사용한 퍽")
+
+            used_perks = [
+                x.strip()
+                for x in clean(row["perks"]).split(" | ")
+                if x.strip()
+            ]
+
+            cols = st.columns(4)
+
+            for i, col in enumerate(cols):
+
+                with col:
+                    if i < len(used_perks):
+
+                        name = used_perks[i]
+
+                        st.markdown(
+                            image_html(
+                                perk_images.get(name, ""),
+                                105, 105
+                            ),
+                            unsafe_allow_html=True
+                        )
+
+                        st.markdown(
+                            '<div style="text-align:center;'
+                            'font-size:13px;">'
+                            f'{html.escape(name)}</div>',
+                            unsafe_allow_html=True
+                        )
+
+                    else:
+                        st.markdown(
+                            '<div style="height:105px;'
+                            'display:flex;align-items:center;'
+                            'justify-content:center;'
+                            'color:#6f6578;">EMPTY</div>',
+                            unsafe_allow_html=True
+                        )
+
+            st.divider()
+
+            if mode == "생존자":
+
+                seconds = int(number(row["chase"]))
+                minutes, seconds = divmod(seconds, 60)
+
+                gen = number(row["generators"]) / 100
+                gen_text = f"{gen:.2f}".rstrip("0").rstrip(".")
+
+                a, b, c = st.columns(3)
+
+                a.metric(
+                    "추격 시간",
+                    f"{minutes}분 {seconds}초"
+                )
+
+                b.metric(
+                    "발전기 수리",
+                    f"{gen_text}개"
+                )
+
+                c.metric(
+                    "구조 횟수",
+                    f"{int(number(row['rescues']))}회"
+                )
+
+            else:
+
+                a, b = st.columns(2)
+
+                a.metric(
+                    "처치 수",
+                    f"{int(number(row['kills']))}명"
+                )
+
+                b.metric(
+                    "갈고리 횟수",
+                    f"{int(number(row['hooks']))}회"
+                )
+
+            st.caption(
+                f"플레이 컨디션 · {clean(row['condition'])}"
+            )
+
+            with st.expander("경기 메모 및 상세 정보"):
+
+                memo = clean(row["memo"])
+
+                st.write(
+                    memo if memo else "작성된 메모가 없습니다."
+                )
+
+def map_picker(key):
+
+    import base64
+    import html
+
+    maps_data = pd.read_csv(
+        "data/maps_clean.csv",
+        keep_default_na=False
+    )
+
+    maps_data = maps_data.sort_values(
+        ["realm", "name"]
+    )
+
+    selected_key = f"{key}_selected"
+    opened_key = f"{key}_opened"
+
+    if selected_key not in st.session_state:
+        st.session_state[selected_key] = ""
+
+    if opened_key not in st.session_state:
+        st.session_state[opened_key] = False
+
+    def render_map(path):
+        if path and Path(path).is_file():
+            encoded = base64.b64encode(
+                Path(path).read_bytes()
+            ).decode("utf-8")
+
+            st.markdown(
+                f'<img src="data:image/png;base64,{encoded}" '
+                'style="width:100%;aspect-ratio:16/9;'
+                'object-fit:cover;display:block;'
+                'margin:auto;border-radius:6px;">',
+                unsafe_allow_html=True
+            )
+
+    st.markdown("""
+    <style>
+    div[class*="st-key-mapcard_"] {
+        background: #19171e;
+        border: 1px solid #39323f;
+        border-radius: 8px;
+        padding: 10px;
+        transition: 0.2s ease;
+    }
+
+    div[class*="st-key-mapcard_"]:hover {
+        border-color: #a578dc;
+        box-shadow: 0 0 15px #8054aa55;
+    }
+
+    div[class*="st-key-mapcard_selected_"] {
+        background: #332143;
+        border: 1px solid #bd8cff;
+    }
+
+    div[class*="st-key-mapcard_selected_"] button {
+        background: #67408c !important;
+        border-color: #b78cdb !important;
+    }
+
+    div[class*="st-key-mapcard_"] button {
+        min-height: 60px;
+    }
+
+    div[class*="st-key-mapcard_"] p {
+        text-align: center;
+        word-break: keep-all;
+    }
+
+    div[class*="st-key-map_selected_"] {
+        background: #21192b;
+        border: 1px solid #59436e;
+        border-radius: 8px;
+        padding: 16px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.subheader("플레이 맵")
+
+    selected = st.session_state[selected_key]
+
+    found = maps_data[
+        maps_data["map_id"] == selected
+    ]
+
+    with st.container(key=f"map_selected_{key}"):
+
+        if not found.empty:
+
+            row = found.iloc[0]
+
+            a, b = st.columns([1, 2])
+
+            with a:
+                render_map(row["image"])
+
+            with b:
+                st.caption("SELECTED MAP")
+                st.markdown(
+                    f"### {row['name']}"
+                )
+                st.caption(row["realm"])
+
+        elif selected == "기타":
+            st.write("기타")
+
+        else:
+            st.caption("아직 선택된 맵이 없습니다.")
+
+        if st.button(
+            "맵 선택 목록 닫기"
+            if st.session_state[opened_key]
+            else "＋ 맵 선택하기",
+            key=f"{key}_toggle",
+            width="stretch"
+        ):
+            st.session_state[opened_key] = (
+                not st.session_state[opened_key]
+            )
+            st.rerun()
+
+    if st.session_state[opened_key]:
+
+        a, b = st.columns([1, 2])
+
+        with a:
+            realm = st.selectbox(
+                "지역 선택",
+                ["전체 지역"] +
+                sorted(maps_data["realm"].unique()),
+                key=f"{key}_realm",
+                on_change=lambda: st.session_state.update({f"{key}_page": 0})
+            )
+
+        with b:
+            search = st.text_input(
+                "맵 검색",
+                placeholder="지역 또는 맵 이름 입력",
+                key=f"{key}_search",
+                on_change=lambda: st.session_state.update({f"{key}_page": 0})
+            )
+
+        visible = maps_data.copy()
+
+        if realm != "전체 지역":
+            visible = visible[
+                visible["realm"] == realm
+            ]
+
+        if search:
+            term = search.replace(" ", "").lower()
+
+            visible = visible[
+                visible["name"].str.replace(
+                    " ", ""
+                ).str.lower().str.contains(
+                    term, regex=False
+                ) |
+                visible["realm"].str.replace(
+                    " ", ""
+                ).str.lower().str.contains(
+                    term, regex=False
+                )
+            ]
+
+        st.caption(f"{len(visible)} MAPS")
+
+        if visible.empty:
+            st.info("검색 결과가 없습니다.")
+
+
+        page_size = 16
+        page_key = f"{key}_page"
+
+        records = visible.to_dict("records")
+        pages = max(1, (len(records)+page_size-1)//page_size)
+
+        page = min(
+            st.session_state.get(page_key, 0),
+            pages-1
+        )
+
+        st.session_state[page_key] = page
+
+        prev, center, nxt = st.columns([1, 2, 1])
+
+        with prev:
+            if st.button(
+                "◀ 이전",
+                key=f"{key}_prev",
+                disabled=page == 0,
+                width="stretch"
+            ):
+                st.session_state[page_key] -= 1
+                st.rerun()
+
+        with center:
+            st.markdown(
+                f'<div style="text-align:center;padding:10px;">'
+                f'{page+1} / {pages} PAGE</div>',
+                unsafe_allow_html=True
+            )
+
+        with nxt:
+            if st.button(
+                "다음 ▶",
+                key=f"{key}_next",
+                disabled=page >= pages-1,
+                width="stretch"
+            ):
+                st.session_state[page_key] += 1
+                st.rerun()
+
+        records = records[
+            page*page_size:(page+1)*page_size
+        ]
+
+        for start in range(0, len(records), 4):
+
+            cols = st.columns(4)
+
+            for col, row in zip(
+                cols, records[start:start+4]
+            ):
+
+                active = selected == row["map_id"]
+
+                prefix = (
+                    "mapcard_selected_"
+                    if active
+                    else "mapcard_"
+                )
+
+                with col:
+                    with st.container(
+                        key=f"{prefix}{key}_{row['map_id']}"
+                    ):
+
+                        render_map(row["image"])
+
+                        region_name = html.escape(
+                            row["realm"]
+                        )
+
+                        st.markdown(
+                            f'<div style="text-align:center;'
+                            f'font-size:12px;color:#b99bdb;'
+                            f'min-height:20px;">'
+                            f'{region_name}</div>',
+                            unsafe_allow_html=True
+                        )
+
+                        if st.button(
+                            row["name"],
+                            key=f"{key}_pick_{row['map_id']}",
+                            help=row["description"] or None,
+                            type="primary" if active else "secondary",
+                            width="stretch"
+                        ):
+                            st.session_state[selected_key] = row["map_id"]
+                            st.session_state[opened_key] = False
+                            st.rerun()
+
+        if st.button(
+            "기타 맵",
+            key=f"{key}_other",
+            width="stretch"
+        ):
+            st.session_state[selected_key] = "기타"
+            st.session_state[opened_key] = False
+            st.rerun()
+
+    if selected == "기타":
+        return "기타"
+
+    if not found.empty:
+        return found.iloc[0]["name"]
+
+    return ""
+
+def perk_picker(perks, role, key):
+
+    import base64
+
+    def render_perk(path, size):
+        encoded = base64.b64encode(
+            Path(path).read_bytes()
+        ).decode("utf-8")
+
+        st.markdown(
+            f'<div style="display:flex;justify-content:center;align-items:center;width:100%;">'
+            f'<img src="data:image/png;base64,{encoded}" '
+            f'style="width:{size}px;max-width:100%;height:auto;display:block;margin:0 auto;">'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+    data = perks[perks["role"] == role].copy()
+    data = data.drop_duplicates("name")
+
+    options = data["name"].tolist()
+    images = dict(zip(data["name"], data["styled_image"]))
+    descriptions = dict(zip(data["name"], data["clean_description"]))
+
+    state = f"{key}_selected"
+    opened = f"{key}_open"
+    page_key = f"{key}_page"
+
+    if state not in st.session_state:
+        st.session_state[state] = []
+
+    if opened not in st.session_state:
+        st.session_state[opened] = False
+
+    if page_key not in st.session_state:
+        st.session_state[page_key] = 0
+
+    selected = [
+        x for x in st.session_state[state]
+        if x in options
+    ]
+
+    st.session_state[state] = selected
+
+    st.markdown("""
+    <style>
+    div[class*="st-key-perkslot_"] {
+        background: rgba(32,24,42,0.85);
+        border: 1px solid #554068;
+        border-radius: 8px;
+        padding: 10px;
+        text-align: center;
+    }
+
+    div[class*="st-key-perkcard_"] {
+        background: #19171e;
+        border: 1px solid #39323f;
+        border-radius: 6px;
+        padding: 8px;
+        transition: 0.2s ease;
+    }
+
+    div[class*="st-key-perkcard_"]:hover {
+        border-color: #a578dc;
+        box-shadow: 0 0 15px #8054aa55;
+    }
+
+    div[class*="st-key-perkcard_selected_"] {
+        background: #332143;
+        border: 1px solid #bd8cff;
+        box-shadow: 0 0 12px #8054aa88;
+    }
+
+    div[class*="st-key-perkcard_"] button {
+        min-height: 45px;
+        padding: 4px;
+    }
+
+    div[class*="st-key-perkcard_"] button p {
+        font-size: 12px;
+    }
+    
+    div[class*="st-key-perk_add_"] button {
+        min-height: 110px !important;
+        background: transparent !important;
+        border: 1px dashed #70558c !important;
+        border-radius: 8px !important;
+        color: #b99bdb !important;
+        transition: all 0.2s ease;
+    }
+
+    div[class*="st-key-perk_add_"] button p {
+        font-size: 38px !important;
+        font-weight: 300 !important;
+        color: #b99bdb !important;
+    }
+
+    div[class*="st-key-perk_add_"] button:hover {
+        background: #352345 !important;
+        border-color: #bd8cff !important;
+        box-shadow: 0 0 18px #8054aa66;
+    }
+
+    div[class*="st-key-perkslot_"] p {
+        text-align: center;
+    }
+
+    div[class*="st-key-perkslot_"] img {
+        margin: auto;
+    }
+
+
+    div[class*="st-key-perkslot_"] {
+        min-height: 245px !important;
+    }
+
+    div[class*="st-key-perkslot_"] p {
+        text-align: center !important;
+    }
+
+    div[class*="st-key-perk_add_"] button {
+        min-height: 180px !important;
+    }
+
+    div[class*="st-key-perkcard_selected_"] button {
+        background: #67408c !important;
+        border-color: #b78cdb !important;
+        color: white !important;
+    }
+
+    div[class*="st-key-perkcard_"] button {
+        min-height: 48px !important;
+    }
+
+    div[class*="st-key-perkcard_"] button p {
+        text-align: center !important;
+        word-break: keep-all !important;
+    }
+</style>
+    """, unsafe_allow_html=True)
+
+    st.subheader("사용한 퍽")
+    st.caption(f"{len(selected)} / 4 SELECTED")
+
+    cols = st.columns(4)
+
+    for i, col in enumerate(cols):
+        with col:
+            with st.container(key=f"perkslot_{key}_{i}"):
+                if i < len(selected):
+                    name = selected[i]
+                    path = Path(str(images.get(name, "")))
+
+                    if path.is_file():
+                        render_perk(path, 140)
+
+                    st.write(name)
+
+                    if st.button(
+                        "선택 해제",
+                        key=f"{key}_remove_{i}",
+                        width="stretch"
+                    ):
+                        st.session_state[state].remove(name)
+                        st.rerun()
+
+                else:
+                    if st.button(
+                        "＋",
+                        key=f"perk_add_{key}_{i}",
+                        width="stretch",
+                        help="퍽 선택 목록 열기"
+                    ):
+                        st.session_state[opened] = True
+                        st.rerun()
+
+                    st.caption(f"퍽 추가 {i+1}")
+
+    if st.session_state[opened]:
+        if st.button(
+            "퍽 선택 목록 닫기",
+            key=f"{key}_toggle",
+            width="stretch"
+        ):
+            st.session_state[opened] = False
+            st.rerun()
+
+    if st.session_state[opened]:
+        search = st.text_input(
+            "퍽 검색",
+            placeholder="퍽 이름을 입력하세요",
+            key=f"{key}_search"
+        )
+
+        visible = [
+            name for name in options
+            if search.replace(" ", "").lower()
+            in name.replace(" ", "").lower()
+        ]
+
+        page_size = 24
+        pages = max(1, (len(visible)+page_size-1)//page_size)
+
+        page = min(st.session_state[page_key], pages-1)
+        st.session_state[page_key] = page
+
+        a, b, c = st.columns([1, 2, 1])
+
+        with a:
+            if st.button(
+                "이전",
+                key=f"{key}_prev",
+                disabled=page == 0,
+                width="stretch"
+            ):
+                st.session_state[page_key] -= 1
+                st.rerun()
+
+        with b:
+            st.markdown(
+                f"<center>{page+1} / {pages} PAGE</center>",
+                unsafe_allow_html=True
+            )
+
+        with c:
+            if st.button(
+                "다음",
+                key=f"{key}_next",
+                disabled=page >= pages-1,
+                width="stretch"
+            ):
+                st.session_state[page_key] += 1
+                st.rerun()
+
+        visible = visible[
+            page*page_size:(page+1)*page_size
+        ]
+
+        if not visible:
+            st.info("검색 결과가 없습니다.")
+
+        for start in range(0, len(visible), 8):
+            cols = st.columns(8)
+
+            for col, name in zip(cols, visible[start:start+8]):
+                with col:
+                    active = name in selected
+
+                    prefix = (
+                        "perkcard_selected_"
+                        if active else "perkcard_"
+                    )
+
+                    with st.container(
+                        key=f"{prefix}{key}_{options.index(name)}"
+                    ):
+                        path = Path(str(images.get(name, "")))
+
+                        if path.is_file():
+                            render_perk(path, 100)
+                        else:
+                            st.caption("NO IMAGE")
+
+                        if st.button(
+                            name, help=descriptions.get(name, ""),
+                            key=f"{key}_pick_{name}",
+                            type="primary" if active else "secondary",
+                            disabled=len(selected)>=4 and not active,
+                            width="stretch"
+                        ):
+                            if active:
+                                st.session_state[state].remove(name)
+                            else:
+                                st.session_state[state].append(name)
+
+                            if len(st.session_state[state]) == 4:
+                                st.session_state[opened] = False
+
+                            st.rerun()
+
+    return st.session_state[state].copy()
+
+
 # 홈 화면
 if menu == "홈":
     st.markdown(
@@ -190,6 +1308,61 @@ elif menu == "경기 기록":
     st.caption("NEW MATCH RECORD")
     st.divider()
 
+    if mode == "생존자":
+        left, right = st.columns(2)
+
+        with left:
+            picked_survivor = character_picker(
+                survivors,
+                "record_survivor",
+                "생존자",
+                "플레이 생존자"
+            )
+
+        with right:
+            picked_killer = character_picker(
+                killers,
+                f"record_{mode}",
+                "살인마",
+                "상대 살인마"
+            )
+
+        picked_survivor = character_picker(
+            survivors,
+            "record_survivor",
+            "생존자",
+            "플레이 생존자",
+            show_grid=True
+        )
+
+    else:
+        picked_killer = character_picker(
+            killers,
+            f"record_{mode}",
+            "살인마",
+            "플레이 살인마"
+        )
+
+    picked_killer = character_picker(
+        killers,
+        f"record_{mode}",
+        "살인마",
+        "살인마 선택",
+        show_grid=True
+    )
+
+    st.divider()
+
+    selected_perks = perk_picker(
+        perks,
+        mode,
+        f"record_perks_{mode}"
+    )
+
+    st.divider()
+
+    selected_map = map_picker(f"record_map_{mode}")
+
     with st.form(f"match_form_{mode}"):
 
         col1, col2 = st.columns(2)
@@ -211,29 +1384,21 @@ elif menu == "경기 기록":
 
         if mode == "생존자":
             with col1:
-                character = st.selectbox(
-                    "플레이 생존자", survivors
-                )
+                character = picked_survivor
+                st.write("플레이 생존자:", character)
             with col2:
-                opponent = st.selectbox(
-                    "상대 살인마", killers
-                )
+                opponent = picked_killer
+                st.write("상대 살인마:", opponent)
         else:
-            character = st.selectbox(
-                "플레이 살인마", killers
-            )
+            character = picked_killer
+            st.write("플레이 살인마:", character)
 
-        selected_map = st.selectbox("맵 선택", maps)
 
         perk_options = perks[
             perks["role"] == mode
         ]["name"].tolist()
 
-        selected_perks = st.multiselect(
-            "사용한 퍽 (최대 4개)",
-            perk_options,
-            max_selections=4
-        )
+        st.caption("선택한 퍽: " + (" / ".join(selected_perks) or "없음"))
 
         st.divider()
         st.subheader("경기 결과")
@@ -259,10 +1424,16 @@ elif menu == "경기 기록":
                 min_value=0, step=10
             )
 
-            generators = col2.number_input(
-                "발전기 수리량 (%)",
-                min_value=0, step=10
+            generator_count = col2.number_input(
+                "발전기 수리 개수",
+                min_value=0.0,
+                value=0.0,
+                step=0.5,
+                format="%.2f",
+                help="발전기 한 개 분량은 1.0, 절반은 0.5입니다."
             )
+
+            generators = int(round(generator_count * 100))
 
             rescues = col3.number_input(
                 "구조 횟수",
@@ -311,7 +1482,7 @@ elif menu == "경기 기록":
             "mode": mode,
             "character": character,
             "opponent": opponent,
-            "map": selected_map,
+            "map": selected_map or "기타",
             "perks": " | ".join(selected_perks),
             "result": result,
             "chase": chase,
@@ -345,9 +1516,16 @@ elif menu == "경기 내역":
     if filtered.empty:
         st.info("아직 저장된 경기 기록이 없습니다.")
     else:
-        st.metric("저장된 경기", f"{len(filtered)}회")
+
 
         display = filtered.drop(columns=["id"]).copy()
+
+        display["generators"] = (
+            pd.to_numeric(
+                display["generators"],
+                errors="coerce"
+            ).fillna(0) / 100
+        ).round(2)
 
         display = display.rename(columns={
             "date": "날짜",
@@ -359,7 +1537,7 @@ elif menu == "경기 내역":
             "perks": "사용 퍽",
             "result": "결과",
             "chase": "추격 시간",
-            "generators": "발전기 수리량",
+            "generators": "발전기 수리 개수",
             "rescues": "구조 횟수",
             "kills": "처치 수",
             "hooks": "갈고리 횟수",
@@ -368,11 +1546,22 @@ elif menu == "경기 내역":
             "memo": "메모"
         })
 
-        st.dataframe(
-            display.iloc[::-1],
-            hide_index=True,
-            use_container_width=True
+        history_view = st.radio(
+            "보기 방식",
+            ["카드 보기", "표 보기"],
+            horizontal=True,
+            key="history_view"
         )
+
+        if history_view == "카드 보기":
+            render_match_history(filtered, perks, mode)
+
+        else:
+            st.dataframe(
+                display.iloc[::-1],
+                hide_index=True,
+                use_container_width=True
+            )
 
         st.divider()
         st.subheader("경기 기록 관리")
@@ -507,10 +1696,17 @@ elif menu == "경기 내역":
                         value=int(selected["chase"])
                     )
 
-                    edit_generators = c2.number_input(
-                        "발전기 수리량 (%)",
-                        min_value=0,
-                        value=int(selected["generators"])
+                    edit_generator_count = c2.number_input(
+                        "발전기 수리 개수",
+                        min_value=0.0,
+                        value=float(selected["generators"]) / 100,
+                        step=0.5,
+                        format="%.2f",
+                        help="발전기 한 개 분량은 1.0, 절반은 0.5입니다."
+                    )
+
+                    edit_generators = int(
+                        round(edit_generator_count * 100)
                     )
 
                     edit_rescues = c3.number_input(
@@ -974,7 +2170,7 @@ elif menu == "캐릭터 및 퍽 분석":
         if mode == "생존자":
             extra = df.groupby("character").agg(
                 평균추격시간=("chase", "mean"),
-                평균발전기수리량=("generators", "mean"),
+                평균발전기수리개수=("generators", lambda x: x.mean() / 100),
                 평균구조횟수=("rescues", "mean")
             ).reset_index()
         else:
@@ -1154,7 +2350,7 @@ elif menu == "맞춤형 리포트":
 
         c1.metric("탈출률", f"{avg:.1f}%")
         c2.metric("평균 추격", f"{chase:.0f}초")
-        c3.metric("평균 발전기", f"{gen:.0f}%")
+        c3.metric("평균 발전기", f"{gen / 100:.2f}개")
         c4.metric("평균 구조", f"{rescue:.1f}회")
 
         if total >= 10:

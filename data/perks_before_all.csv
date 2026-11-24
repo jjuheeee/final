@@ -1,0 +1,26 @@
+﻿name,role,category,image
+전력 질주,생존자,추격,assets/perks/survivor/sprintburst.png
+균형 잡힌 착지,생존자,추격,assets/perks/survivor/balancedlanding.png
+유연함,생존자,추격,assets/perks/survivor/lithe.png
+데드 하드,생존자,추격,assets/perks/survivor/deadhard.png
+기회의 창,생존자,추격,assets/perks/survivor/windowsofopportunity.png
+아드레날린,생존자,생존,assets/perks/survivor/adrenaline.png
+결정적인 일격,생존자,생존,assets/perks/survivor/decisivestrike.png
+불굴,생존자,생존,assets/perks/survivor/unbreakable.png
+왜곡,생존자,은신,assets/perks/survivor/distortion.png
+고양이,생존자,정보,assets/perks/survivor/spinechill.png
+유대감,생존자,정보,assets/perks/survivor/bond.png
+혈족,생존자,정보,assets/perks/survivor/kindred.png
+자기 치료,생존자,치료,assets/perks/survivor/selfcare.png
+식물학 지식,생존자,치료,assets/perks/survivor/botanyknowledge.png
+과집중,생존자,발전기,assets/perks/survivor/hyperfocus.png
+독학자,생존자,치료,assets/perks/survivor/autodidact.png
+빌려온 시간,생존자,구조,assets/perks/survivor/borrowedtime.png
+바비큐 & 칠리,살인마,정보,assets/perks/killer/barbecueandchilli.png
+주술: 파멸,살인마,발전기 견제,assets/perks/killer/hexruin.png
+깜짝 상자,살인마,발전기 견제,assets/perks/killer/popgoestheweasel.png
+부정한 개입,살인마,발전기 견제,assets/perks/killer/corruptintervention.png
+고통의 울림,살인마,발전기 견제,assets/perks/killer/scourgehookpainresonance.png
+치명적인 추적자,살인마,정보,assets/perks/killer/lethalpursuer.png
+속임수,살인마,추격,assets/perks/killer/bamboozle.png
+인내심,살인마,추격,assets/perks/killer/enduring.png
